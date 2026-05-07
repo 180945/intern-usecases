@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+      background: transparent;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      user-select: none;
+    }
+
+    .cat-wrapper {
+      position: absolute;
+      bottom: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      animation: slideIn 3s cubic-bezier(0.25, 0.1, 0.25, 1) forwards;
+    }
+
+    @keyframes slideIn {
+      from { left: -500px; transform: translateX(0); }
+      to   { left: 50%; transform: translateX(-50%); }
+    }
+
+    .cat-video {
+      height: 80vh;
+      filter: drop-shadow(0 10px 30px rgba(0,0,0,0.4));
+    }
+
+    .timer {
+      position: fixed;
+      top: 30px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 140px;
+      font-weight: 900;
+      color: white;
+      text-shadow: 0 4px 40px rgba(0,0,0,0.8), 0 0 80px rgba(0,0,0,0.5);
+      letter-spacing: -4px;
+      font-variant-numeric: tabular-nums;
+      opacity: 0;
+      animation: fadeIn 0.8s ease-out 3s forwards;
+    }
+
+    @keyframes fadeIn {
+      to { opacity: 1; }
+    }
+
+    .cat-speech {
+      position: absolute;
+      top: 20px;
+      right: -220px;
+      background: white;
+      color: #333;
+      padding: 10px 16px;
+      border-radius: 18px;
+      font-size: 14px;
+      font-weight: 600;
+      white-space: nowrap;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+      animation: fadeInSpeech 8s ease-in-out 3s infinite;
+    }
+    .cat-speech::after {
+      content: '';
+      position: absolute;
+      bottom: -8px;
+      left: 50%;
+      transform: translateX(-50%);
+      border: 8px solid transparent;
+      border-top-color: white;
+    }
+
+    @keyframes fadeInSpeech {
+      0%, 100% { opacity: 0; }
+      15%, 85% { opacity: 1; }
+    }
+  </style>
+</head>
+<body>
+  <div class="cat-wrapper">
+    <div class="cat-speech" id="speech">Rest your eyes, human~</div>
+    <video class="cat-video" id="catVideo" autoplay muted playsinline>
+      <source src="fatcat.webm" type="video/webm">
+      <source src="fatcat.mp4" type="video/mp4">
+    </video>
+  </div>
+  <div class="timer" id="timer">5:00</div>
+
+  <script>
+    const BREAK_SECONDS = 5 * 60;
+    const startTime = Date.now();
+    const video = document.getElementById('catVideo');
+
+    // Pause video when it ends (cat finishes walking, sits down)
+    video.addEventListener('ended', () => {
+      video.currentTime = video.duration - 0.1;
+      video.pause();
+    });
+    // Backup: pause after 8s
+    setTimeout(() => {
+      video.pause();
+    }, 8000);
+
+    const messages = [
+      "Rest your eyes, human~",
+      "No working! I'm sitting here now.",
+      "Stretch those legs!",
+      "Drink some water!",
+      "Look at something 20ft away~",
+      "Deep breath... in... out...",
+      "Your code can wait. I can't.",
+      "Pet a real cat if you have one!",
+      "Roll your shoulders~",
+      "Almost done... maybe.",
+    ];
+
+    let msgIdx = 0;
+    setInterval(() => {
+      msgIdx = (msgIdx + 1) % messages.length;
+      document.getElementById('speech').textContent = messages[msgIdx];
+    }, 8000);
+
+    function updateTimer() {
+      const elapsed = Math.floor((Date.now() - startTime) / 1000);
+      const remaining = Math.max(0, BREAK_SECONDS - elapsed);
+
+      const min = Math.floor(remaining / 60);
+      const sec = remaining % 60;
+      document.getElementById('timer').textContent =
+        `${min}:${sec.toString().padStart(2, '0')}`;
+
+      if (remaining > 0) {
+        requestAnimationFrame(() => setTimeout(updateTimer, 200));
+      }
+    }
+
+    updateTimer();
+  </script>
+</body>
+</html>

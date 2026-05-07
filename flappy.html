@@ -1,0 +1,593 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>Scream Flappy</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body {
+      width: 100%;
+      height: 100%;
+      background: transparent;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, sans-serif;
+      color: #fff;
+      overflow: hidden;
+      user-select: none;
+      -webkit-app-region: no-drag;
+    }
+    #game {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      display: block;
+      background: transparent;
+    }
+    .panel {
+      position: absolute;
+      top: 12px;
+      left: 12px;
+      right: 12px;
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      padding: 10px 12px;
+      background: rgba(15, 23, 42, 0.42);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 14px;
+      backdrop-filter: blur(6px);
+      font-size: 12px;
+      -webkit-app-region: drag;
+      z-index: 30;
+    }
+    .panel > * { -webkit-app-region: no-drag; }
+    .meter {
+      flex: 1;
+      height: 14px;
+      background: rgba(255,255,255,0.08);
+      border-radius: 999px;
+      position: relative;
+      overflow: hidden;
+    }
+    .meter-fill {
+      position: absolute;
+      inset: 0 100% 0 0;
+      background: linear-gradient(90deg, #86efac, #fde047, #f87171);
+      transition: right 60ms linear;
+    }
+    .meter-thresh {
+      position: absolute;
+      top: -2px;
+      bottom: -2px;
+      width: 2px;
+      background: #f0abfc;
+      box-shadow: 0 0 6px #f0abfc;
+    }
+    .threshold {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      color: #cbd5e1;
+    }
+    .threshold input {
+      width: 110px;
+      accent-color: #f0abfc;
+    }
+    .score {
+      position: absolute;
+      top: 74px;
+      left: 0;
+      right: 0;
+      text-align: center;
+      font-size: 64px;
+      font-weight: 900;
+      color: #fff;
+      text-shadow: 0 4px 20px rgba(0,0,0,0.7), 0 0 30px rgba(0,0,0,0.5);
+      letter-spacing: -2px;
+      pointer-events: none;
+    }
+    .hint {
+      position: absolute;
+      bottom: 14px;
+      left: 0;
+      right: 0;
+      text-align: center;
+      font-size: 13px;
+      color: #e2e8f0;
+      text-shadow: 0 2px 8px rgba(0,0,0,0.8);
+      pointer-events: none;
+    }
+    .overlay {
+      position: absolute;
+      left: 20px;
+      right: 20px;
+      top: 96px;
+      bottom: 50px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      gap: 14px;
+      background: rgba(2, 6, 23, 0.34);
+      backdrop-filter: blur(2px);
+      border-radius: 20px;
+      z-index: 20;
+    }
+    .overlay h1 { font-size: 36px; }
+    .overlay p { font-size: 14px; color: #cbd5e1; max-width: 380px; text-align: center; line-height: 1.5; }
+    .restart-row {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+    .btn {
+      border: 0;
+      border-radius: 999px;
+      padding: 12px 22px;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      color: #03111c;
+      background: linear-gradient(135deg, #7dd3fc, #86efac);
+    }
+    .btn.secondary {
+      background: rgba(255,255,255,0.1);
+      color: #f8fafc;
+      border: 1px solid rgba(255,255,255,0.2);
+    }
+    .mic-status {
+      font-size: 11px;
+      color: #94a3b8;
+      min-width: 60px;
+      text-align: right;
+    }
+    .debug-log {
+      position: absolute;
+      left: 16px;
+      right: 16px;
+      bottom: 42px;
+      text-align: center;
+      font-size: 12px;
+      color: #f8fafc;
+      text-shadow: 0 2px 8px rgba(0,0,0,0.8);
+      pointer-events: none;
+      z-index: 25;
+      opacity: 0.9;
+    }
+    .event-log {
+      position: absolute;
+      left: 12px;
+      bottom: 64px;
+      max-width: 60%;
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 11px;
+      color: #e2e8f0;
+      pointer-events: none;
+      z-index: 25;
+    }
+    .event-log .row {
+      background: rgba(2, 6, 23, 0.55);
+      border: 1px solid rgba(255,255,255,0.06);
+      padding: 3px 8px;
+      border-radius: 6px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .event-log .t { color: #94a3b8; margin-right: 6px; }
+    .event-log .src { font-weight: 700; margin-right: 6px; }
+    .event-log .src-bridge { color: #f0abfc; }
+    .event-log .src-mic    { color: #86efac; }
+    .event-log .src-kbd    { color: #7dd3fc; }
+    .event-log .src-game   { color: #fde047; }
+  </style>
+</head>
+<body>
+  <canvas id="game"></canvas>
+
+  <div class="panel">
+    <span style="font-weight:700;">🎤</span>
+    <div class="meter">
+      <div class="meter-fill" id="meterFill"></div>
+      <div class="meter-thresh" id="meterThresh"></div>
+    </div>
+    <label class="threshold">
+      thr
+      <input type="range" id="threshold" min="0" max="100" value="20" />
+      <span id="threshVal">20</span>
+    </label>
+    <span class="mic-status" id="micStatus">mic off</span>
+  </div>
+
+  <div class="score" id="score">0</div>
+  <div class="hint">SPACE to jump · scream/yell to fly · loud sound after game over = restart · close window to exit</div>
+  <div class="debug-log" id="debugLog"></div>
+  <div class="event-log" id="eventLog"></div>
+
+  <div class="overlay" id="overlay">
+    <h1>🐦 Scream Flappy</h1>
+    <p>Yell into the mic to flap. Louder than the threshold = lift. SPACE works too. Avoid the pipes.</p>
+    <div class="restart-row">
+      <button class="btn" id="startBtn">Enable mic & start</button>
+      <button class="btn secondary" id="startNoMicBtn">Start without mic (keyboard only)</button>
+    </div>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('game');
+    const ctx = canvas.getContext('2d');
+    const scoreEl = document.getElementById('score');
+    const meterFill = document.getElementById('meterFill');
+    const meterThresh = document.getElementById('meterThresh');
+    const threshSlider = document.getElementById('threshold');
+    const threshVal = document.getElementById('threshVal');
+    const micStatus = document.getElementById('micStatus');
+    const overlay = document.getElementById('overlay');
+    const startBtn = document.getElementById('startBtn');
+    const startNoMicBtn = document.getElementById('startNoMicBtn');
+    const debugLog = document.getElementById('debugLog');
+    const eventLogEl = document.getElementById('eventLog');
+
+    const logEntries = [];
+    const LOG_MAX = 6;
+    function escapeHtml(s) {
+      return String(s).replace(/[&<>"']/g, (c) => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+      }[c]));
+    }
+    function logEvent(source, text) {
+      const d = new Date();
+      const hms = `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}:${String(d.getSeconds()).padStart(2,'0')}`;
+      logEntries.unshift({ hms, source, text: String(text) });
+      if (logEntries.length > LOG_MAX) logEntries.length = LOG_MAX;
+      eventLogEl.innerHTML = logEntries.map((e) => (
+        `<div class="row"><span class="t">${e.hms}</span>` +
+        `<span class="src src-${escapeHtml(e.source)}">${escapeHtml(e.source)}</span>` +
+        `${escapeHtml(e.text)}</div>`
+      )).join('');
+    }
+
+    // IPC listener for command-bridge events from main.js (Superwhisper, etc.)
+    try {
+      if (typeof require === 'function') {
+        const { ipcRenderer } = require('electron');
+        ipcRenderer.on('bridge-command', (_evt, payload) => {
+          const rawText = payload && payload.rawText ? payload.rawText : '';
+          const action = payload && payload.result && payload.result.action ? payload.result.action : 'unknown';
+          const ok = payload && payload.result && payload.result.ok;
+          const src = payload && payload.source ? payload.source : 'bridge';
+          logEvent(src, `"${rawText}" → ${action}${ok ? '' : ' (no match)'}`);
+        });
+      }
+    } catch (err) {
+      console.warn('ipcRenderer unavailable:', err);
+    }
+
+    let W = 0, H = 0;
+    function resize() {
+      W = canvas.width = window.innerWidth * devicePixelRatio;
+      H = canvas.height = window.innerHeight * devicePixelRatio;
+      canvas.style.width = window.innerWidth + 'px';
+      canvas.style.height = window.innerHeight + 'px';
+      ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
+    }
+    window.addEventListener('resize', resize);
+    resize();
+
+    function vw() { return window.innerWidth; }
+    function vh() { return window.innerHeight; }
+
+    const bird = {
+      x: 120,
+      y: 240,
+      vy: 0,
+      r: 16,
+    };
+    const GRAVITY = 1100;        // px/s^2
+    const SPIKE_FLAP = -360;     // velocity kick from a sound spike
+    const JUMP_IMPULSE = -380;   // velocity from SPACE
+    const PIPE_W = 70;
+    const PIPE_GAP = 200;
+    const PIPE_SPEED = 180;      // px/s
+    const PIPE_INTERVAL = 1.7;   // seconds
+
+    let pipes = [];
+    let pipeTimer = 0;
+    let score = 0;
+    let running = false;
+    let dead = false;
+    let lastT = performance.now();
+    let loudness = 0;          // 0..1 smoothed meter only
+    let threshold = 0.2;       // 0..1 spike threshold
+    let micEnabled = false;
+    let restartArmed = false;
+    let restartCooldownUntil = 0;
+    let lastSpikeAt = 0;
+    // Suppress mic spike triggers briefly after a (re)start so a
+    // still-loud post-death yell can't immediately re-flap the new bird.
+    let inputGraceUntil = 0;
+
+    threshSlider.addEventListener('input', () => {
+      threshold = +threshSlider.value / 100;
+      threshVal.textContent = threshSlider.value;
+      meterThresh.style.left = (threshold * 100) + '%';
+    });
+    meterThresh.style.left = (threshold * 100) + '%';
+
+    const SPRITE_BASE = 'scream-flappy/assets/';
+    const sprites = {};
+    function loadSprite(key, file) {
+      return new Promise((res) => {
+        const img = new Image();
+        img.onload = () => { sprites[key] = img; res(); };
+        img.onerror = () => { console.warn('sprite load failed:', file); res(); };
+        img.src = SPRITE_BASE + file;
+      });
+    }
+    Promise.all([
+      loadSprite('birdUp',   'bird-up.png'),
+      loadSprite('birdDown', 'bird-down.png'),
+      loadSprite('pipeBody', 'pipe-body.png'),
+      loadSprite('pipeLip',  'pipe-lip.png'),
+    ]);
+
+    function resetGame() {
+      bird.x = Math.max(100, vw() * 0.25);
+      bird.y = vh() * 0.4;
+      bird.vy = 0;
+      restartArmed = false;
+      restartCooldownUntil = 0;
+      lastSpikeAt = 0;
+      pipes = [];
+      pipeTimer = 0;
+      score = 0;
+      dead = false;
+      // Pull smoothed loudness down so a still-loud mic doesn't
+      // fail the crossedUp check forever (or trigger immediately).
+      loudness = 0;
+      scoreEl.textContent = '0';
+    }
+
+    function spawnPipe() {
+      const margin = 60;
+      const minTop = margin;
+      const maxTop = vh() - margin - PIPE_GAP;
+      const top = Math.max(minTop, Math.random() * (maxTop - minTop) + minTop);
+      pipes.push({ x: vw() + 20, top, scored: false });
+    }
+
+    function setDebug(text) {
+      debugLog.textContent = text || '';
+    }
+
+    function endRun() {
+      if (dead) return; // idempotent: collision + bottom-out can both fire in one tick
+      dead = true;
+      running = false;
+      overlay.style.display = 'flex';
+      startBtn.textContent = micEnabled ? 'Restart' : 'Enable mic & restart';
+      startNoMicBtn.textContent = 'Restart (keyboard only)';
+      restartArmed = true;
+      restartCooldownUntil = performance.now() + 600;
+      setDebug('game over · clap / yell once to restart');
+      logEvent('game', `game over · score=${score}`);
+    }
+
+    function tick(now) {
+      const dt = Math.min(0.05, (now - lastT) / 1000);
+      lastT = now;
+
+      if (running) {
+        bird.vy += GRAVITY * dt;
+        // clamp velocity so loud screams don't shoot off-screen
+        bird.vy = Math.max(-520, Math.min(900, bird.vy));
+        bird.y += bird.vy * dt;
+
+        // pipes
+        pipeTimer += dt;
+        if (pipeTimer >= PIPE_INTERVAL) {
+          pipeTimer = 0;
+          spawnPipe();
+        }
+        for (const p of pipes) p.x -= PIPE_SPEED * dt;
+        pipes = pipes.filter(p => p.x + PIPE_W > -10);
+
+        // scoring + collision
+        for (const p of pipes) {
+          if (!p.scored && p.x + PIPE_W < bird.x - bird.r) {
+            p.scored = true;
+            score++;
+            scoreEl.textContent = String(score);
+          }
+          // collision
+          const inX = bird.x + bird.r > p.x && bird.x - bird.r < p.x + PIPE_W;
+          if (inX) {
+            const inGap = bird.y - bird.r > p.top && bird.y + bird.r < p.top + PIPE_GAP;
+            if (!inGap) endRun();
+          }
+        }
+
+        if (bird.y - bird.r < 0 || bird.y + bird.r > vh()) endRun();
+      }
+
+      draw();
+      requestAnimationFrame(tick);
+    }
+
+    const PIXEL_SCALE = 4;       // bird native pixel → screen pixel scale
+    const PIPE_TILE_SCALE = 4;   // pipe body native pixel → screen pixel scale (pipe tile = 16px tall)
+    const LIP_H = 16;            // lip height on screen
+    const LIP_OVERHANG = 5;      // lip extends this many px past the body on each side
+
+    function drawTiledPipeBody(img, dx, dy, dw, dh) {
+      if (dh <= 0) return;
+      const tileH = img.height * PIPE_TILE_SCALE;
+      let drawn = 0;
+      while (drawn + tileH <= dh) {
+        ctx.drawImage(img, dx, dy + drawn, dw, tileH);
+        drawn += tileH;
+      }
+      const remain = dh - drawn;
+      if (remain > 0) {
+        const srcH = Math.min(img.height, Math.max(1, Math.ceil(remain / PIPE_TILE_SCALE)));
+        ctx.drawImage(img, 0, 0, img.width, srcH, dx, dy + drawn, dw, remain);
+      }
+    }
+
+    function drawPipe(p) {
+      const body = sprites.pipeBody;
+      const lip = sprites.pipeLip;
+      if (!body || !lip) return;
+      const x = Math.round(p.x);
+      const top = Math.round(p.top);
+      const by = Math.round(p.top + PIPE_GAP);
+      const lipX = x - LIP_OVERHANG;
+      const lipW = PIPE_W + LIP_OVERHANG * 2;
+
+      ctx.save();
+      ctx.imageSmoothingEnabled = false;
+      drawTiledPipeBody(body, x, 0, PIPE_W, top - LIP_H);
+      ctx.drawImage(lip, lipX, top - LIP_H, lipW, LIP_H);
+      ctx.drawImage(lip, lipX, by, lipW, LIP_H);
+      drawTiledPipeBody(body, x, by + LIP_H, PIPE_W, vh() - by - LIP_H);
+      ctx.restore();
+    }
+
+    function drawBird() {
+      const tilt = Math.max(-0.45, Math.min(0.85, bird.vy / 650));
+      const flapFrame = running ? Math.floor(performance.now() / 90) % 2 : 0;
+      const img = flapFrame === 0 ? sprites.birdUp : sprites.birdDown;
+      if (!img) return;
+      const dw = img.width * PIXEL_SCALE;
+      const dh = img.height * PIXEL_SCALE;
+      ctx.save();
+      ctx.translate(bird.x, bird.y);
+      ctx.rotate(tilt);
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(img, -Math.round(dw / 2), -Math.round(dh / 2), dw, dh);
+      ctx.restore();
+    }
+
+    function draw() {
+      ctx.clearRect(0, 0, vw(), vh());
+      for (const p of pipes) drawPipe(p);
+      drawBird();
+    }
+
+    // input
+    window.addEventListener('keydown', (e) => {
+      if (e.code === 'Space') {
+        e.preventDefault();
+        if (running) {
+          bird.vy = JUMP_IMPULSE;
+        } else if (overlay.style.display !== 'none') {
+          startGame(false, 'kbd');
+        }
+      }
+      if (e.code === 'KeyR' && (dead || overlay.style.display !== 'none')) {
+        e.preventDefault();
+        startGame(micEnabled, 'kbd');
+      }
+    });
+
+    // mic
+    let audioCtx = null;
+    let analyser = null;
+    let micData = null;
+    let micStream = null;
+
+    async function enableMic() {
+      try {
+        micStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } });
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const src = audioCtx.createMediaStreamSource(micStream);
+        analyser = audioCtx.createAnalyser();
+        analyser.fftSize = 1024;
+        analyser.smoothingTimeConstant = 0.4;
+        src.connect(analyser);
+        micData = new Uint8Array(analyser.fftSize);
+        micEnabled = true;
+        micStatus.textContent = 'mic on';
+        micStatus.style.color = '#86efac';
+        loudnessLoop();
+        return true;
+      } catch (err) {
+        micStatus.textContent = 'mic err';
+        micStatus.style.color = '#f87171';
+        console.error('mic error', err);
+        return false;
+      }
+    }
+
+    function loudnessLoop() {
+      if (!analyser) return;
+      analyser.getByteTimeDomainData(micData);
+      // RMS
+      let sum = 0;
+      for (let i = 0; i < micData.length; i++) {
+        const v = (micData[i] - 128) / 128;
+        sum += v * v;
+      }
+      const rms = Math.sqrt(sum / micData.length);
+      // map to 0..1 for display + spike detection
+      const mapped = Math.min(1, rms * 10.0);
+      const previous = loudness;
+      loudness = loudness * 0.22 + mapped * 0.78;
+      meterFill.style.right = (100 - loudness * 100) + '%';
+
+      const now = performance.now();
+      const crossedUp = previous <= threshold && loudness > threshold;
+      const cooldownPassed = now - lastSpikeAt > 220;
+      const graceOver = now >= inputGraceUntil;
+      if (crossedUp && cooldownPassed && graceOver) {
+        lastSpikeAt = now;
+        if (running) {
+          bird.vy = SPIKE_FLAP;
+          setDebug('spike flap');
+        } else if (dead && restartArmed && now > restartCooldownUntil) {
+          // Disarm BEFORE startGame so a still-loud mic re-entering
+          // this branch on a later tick can't double-trigger.
+          restartArmed = false;
+          setDebug('spike restart');
+          startGame(true, 'mic');
+          // do NOT return — keep the mic loop alive across restart
+        }
+      }
+
+      requestAnimationFrame(loudnessLoop);
+    }
+
+    function startGame(withMic, source) {
+      resetGame();
+      overlay.style.display = 'none';
+      setDebug('');
+      running = true;
+      lastT = performance.now();
+      // Brief grace so a still-active scream from before the restart
+      // doesn't slam the new bird into the ceiling on frame 1.
+      inputGraceUntil = performance.now() + 250;
+      logEvent(source || 'kbd', withMic ? 'game start (mic)' : 'game start (kbd)');
+      if (withMic && !micEnabled) {
+        enableMic();
+      }
+    }
+
+    startBtn.addEventListener('click', async () => {
+      if (!micEnabled) {
+        const ok = await enableMic();
+        if (!ok) return; // stay on overlay
+      }
+      startGame(true, 'kbd');
+    });
+    startNoMicBtn.addEventListener('click', () => {
+      startGame(false, 'kbd');
+    });
+
+    requestAnimationFrame((t) => { lastT = t; tick(t); });
+  </script>
+</body>
+</html>

@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>Fat Cat Voice Control</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: linear-gradient(180deg, #111827 0%, #030712 100%);
+      color: #f9fafb;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .card {
+      width: 100%;
+      background: rgba(17, 24, 39, 0.92);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 24px;
+      padding: 24px;
+      box-shadow: 0 24px 80px rgba(0,0,0,0.45);
+    }
+    h1 { margin: 0 0 10px; font-size: 28px; }
+    p { margin: 0 0 16px; color: #cbd5e1; line-height: 1.6; }
+    .cat { font-size: 56px; margin-bottom: 10px; }
+    .status {
+      min-height: 72px;
+      padding: 14px 16px;
+      border-radius: 16px;
+      background: rgba(255,255,255,0.06);
+      color: #e5e7eb;
+      margin-bottom: 16px;
+      line-height: 1.5;
+    }
+    .btn {
+      width: 100%;
+      border: 0;
+      border-radius: 999px;
+      padding: 16px 18px;
+      font-size: 16px;
+      font-weight: 700;
+      cursor: pointer;
+      color: #03111c;
+      background: linear-gradient(135deg, #7dd3fc, #86efac);
+    }
+    .hint {
+      margin-top: 14px;
+      font-size: 13px;
+      color: #94a3b8;
+    }
+    .listening {
+      box-shadow: 0 0 0 4px rgba(125, 211, 252, 0.2);
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="cat">🐱</div>
+    <h1>Voice control</h1>
+    <p>Click the button, allow microphone access, then say: <strong>“cat, break now”</strong>.</p>
+    <div class="status" id="status">Waiting for you, human.</div>
+    <button class="btn" id="listenBtn">Start listening</button>
+    <div class="hint">Current MVP supports one command: break now.</div>
+  </div>
+
+  <script>
+    const statusEl = document.getElementById('status');
+    const button = document.getElementById('listenBtn');
+
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+    function setStatus(text) {
+      statusEl.textContent = text;
+    }
+
+    if (!SpeechRecognition) {
+      button.disabled = true;
+      setStatus('Speech recognition is not available in this Electron runtime.');
+    } else {
+      const recognition = new SpeechRecognition();
+      recognition.lang = 'en-US';
+      recognition.interimResults = false;
+      recognition.maxAlternatives = 1;
+
+      button.addEventListener('click', async () => {
+        try {
+          await navigator.mediaDevices.getUserMedia({ audio: true });
+          button.classList.add('listening');
+          setStatus('Listening... say “cat, break now”.');
+          recognition.start();
+        } catch (error) {
+          setStatus(`Mic permission failed: ${error.message}`);
+        }
+      });
+
+      recognition.onresult = (event) => {
+        const text = event.results[0][0].transcript;
+        setStatus(`Heard: “${text}”`);
+        window.require('electron').ipcRenderer.send('voice-command', text);
+      };
+
+      recognition.onerror = (event) => {
+        button.classList.remove('listening');
+        setStatus(`Voice error: ${event.error}`);
+      };
+
+      recognition.onend = () => {
+        button.classList.remove('listening');
+      };
+    }
+
+    window.require('electron').ipcRenderer.on('cat-status', (_event, text) => {
+      setStatus(text);
+    });
+  </script>
+</body>
+</html>
